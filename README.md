@@ -63,10 +63,12 @@ python chat_server.py
 
 ### Step 1: Deploy API to Replit
 
-1. Fork this repository to your GitHub account
-2. Import to Replit from GitHub
-3. Run the project - Replit will automatically start the API server
-4. Note your Replit app URL (e.g., `https://your-app.yourusername.repl.co`)
+1. Go to [Replit](https://replit.com) and create a new Python repl
+2. Import from GitHub: `https://github.com/imreallyadi/PersonalLanguageModel`
+3. Replit will automatically detect the Python project
+4. Click "Run" - this will start the API server on port 8000
+5. Your API will be available at: `https://personallanguagemodel.imreallyadi.repl.co`
+6. Test the API by visiting: `https://personallanguagemodel.imreallyadi.repl.co/docs`
 
 ### Step 2: Enable GitHub Pages
 

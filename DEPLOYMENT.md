@@ -4,6 +4,8 @@
 
 This guide shows how to deploy your LLM system with the frontend on GitHub Pages and backend on Replit.
 
+**Important**: GitHub Pages only hosts static files (HTML, CSS, JS). The Python API server must be deployed separately to a platform like Replit, Railway, or Heroku.
+
 ### Step 1: Deploy Backend to Replit
 
 1. **Fork this repository** to your GitHub account
