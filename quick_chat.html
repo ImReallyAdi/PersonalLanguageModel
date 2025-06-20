@@ -223,7 +223,12 @@
             try {
                 const response = await fetch(`${API_BASE}/`);
                 if (response.ok) {
-                    setStatus('Connected to API');
+                    setStatus('Connected to API - Ready to chat!');
+                    // Test the chat endpoint
+                    const testResponse = await fetch(`${API_BASE}/api/chat/test`);
+                    if (testResponse.ok) {
+                        setStatus('Chat system ready!');
+                    }
                 } else {
                     setStatus('API connection issue');
                 }

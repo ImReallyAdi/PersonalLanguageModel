@@ -53,6 +53,70 @@ training_progress = {"status": "idle", "epoch": 0, "loss": 0, "total_epochs": 0}
 @app.on_event("startup")
 async def startup_event():
     init_database()
+    
+    # Try to load the most recent model
+    try:
+        db = get_db_session()
+        models = list_models(db, limit=1)
+        if models:
+            model_data = load_model_from_db(db, models[0]['id'])
+            if model_data:
+                global current_model, char_to_idx, idx_to_char, current_model_id
+                
+                # Load model
+                current_model = SimpleTransformer(
+                    vocab_size=model_data['vocab_size'],
+                    embed_dim=model_data['embed_dim'],
+                    num_heads=model_data['num_heads'],
+                    num_layers=model_data['num_layers'],
+                    sequence_length=model_data['sequence_length']
+                )
+                current_model.load_state_dict(model_data['model_state'])
+                current_model.eval()
+                
+                char_to_idx = model_data['char_to_idx']
+                idx_to_char = model_data['idx_to_char']
+                current_model_id = models[0]['id']
+                
+                print(f"✓ Loaded model: {models[0]['name']} ({model_data['total_parameters']:,} parameters)")
+        db.close()
+    except Exception as e:
+        print(f"No saved model found: {e}")
+        
+    # If no model exists, train a quick demo model
+    if current_model is None:
+        print("Training demo model...")
+        demo_text = """Hello! I am an AI assistant. I can help with questions and conversations. I enjoy talking about science, technology, history, arts, and life. I aim to provide helpful responses. What would you like to talk about? I can help with explanations, writing, problem solving, and conversation. Thank you for chatting! How can I help you today? I hope you are having a great day. Feel free to ask me anything. I love learning and sharing knowledge."""
+        
+        try:
+            # Quick training configuration  
+            data_loader = TextDataLoader(demo_text, sequence_length=20, batch_size=8)
+            model = SimpleTransformer(
+                vocab_size=len(data_loader.char_to_idx),
+                embed_dim=64,
+                num_heads=2,
+                num_layers=2,
+                sequence_length=20
+            )
+            
+            trainer = ModelTrainer(model, data_loader, learning_rate=0.01)
+            
+            # Train for 5 epochs for better quality
+            for epoch in range(5):
+                loss = trainer.train_epoch()
+                print(f"Epoch {epoch+1}/5, Loss: {loss:.4f}")
+            
+            # Set global variables
+            current_model = model
+            char_to_idx = data_loader.char_to_idx
+            idx_to_char = data_loader.idx_to_char
+            current_model_id = "demo"
+            
+            print(f"✓ Demo model ready! Vocab size: {len(char_to_idx)}")
+            print(f"Available characters: {sorted(list(char_to_idx.keys()))}")
+            
+        except Exception as e:
+            print(f"Failed to train demo model: {e}")
 
 # Request/Response models
 class TrainingRequest(BaseModel):
@@ -654,12 +718,19 @@ async def quick_chat(message: str):
     if current_model is None:
         return {"error": "No model loaded"}
     
+    if char_to_idx is None or idx_to_char is None:
+        return {"error": "Character mappings not available"}
+    
     try:
         prompt = f"User: {message}\nAI:"
         
+        # Ensure prompt contains only characters from our vocabulary
+        valid_chars = set(char_to_idx.keys())
+        filtered_prompt = ''.join(c if c in valid_chars else ' ' for c in prompt)
+        
         generator = TextGenerator(current_model, char_to_idx, idx_to_char, str(get_device()))
         generated_text = generator.generate(
-            prompt=prompt,
+            prompt=filtered_prompt,
             max_length=100,
             temperature=0.8,
             top_k=10
@@ -669,7 +740,7 @@ async def quick_chat(message: str):
         if "AI:" in generated_text:
             response = generated_text.split("AI:")[-1].strip()
         else:
-            response = generated_text[len(prompt):].strip()
+            response = generated_text[len(filtered_prompt):].strip()
         
         return {"response": response}
         
