@@ -715,11 +715,31 @@ async def quick_chat(message: str):
     """Quick chat endpoint for simple GET requests"""
     global current_model, char_to_idx, idx_to_char
     
-    if current_model is None:
-        return {"error": "No model loaded"}
-    
-    if char_to_idx is None or idx_to_char is None:
-        return {"error": "Character mappings not available"}
+    if current_model is None or char_to_idx is None or idx_to_char is None:
+        # Auto-train a demo model if none exists
+        demo_text = "Hello I am an AI assistant. I can help with questions and conversations. I enjoy talking about science technology history arts and life. I aim to provide helpful responses. What would you like to talk about? I can help with explanations writing problem solving and conversation. Thank you for chatting! How can I help you today? I hope you are having a great day. Feel free to ask me anything. I love learning and sharing knowledge."
+        print("Auto-training model on first chat request...")
+        
+        try:
+            data_loader = TextDataLoader(demo_text, sequence_length=20, batch_size=8)
+            model = SimpleTransformer(
+                vocab_size=len(data_loader.char_to_idx),
+                embed_dim=64,
+                num_heads=2,
+                num_layers=2,
+                sequence_length=20
+            )
+            
+            trainer = ModelTrainer(model, data_loader, learning_rate=0.01)
+            for _ in range(3):
+                trainer.train_epoch()
+            
+            current_model = model
+            char_to_idx = data_loader.char_to_idx
+            idx_to_char = data_loader.idx_to_char
+            
+        except Exception as e:
+            return {"error": f"Failed to initialize model: {str(e)}"}
     
     try:
         prompt = f"User: {message}\nAI:"
