@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Language Model Demo</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            overflow: hidden;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+        
+        .header p {
+            opacity: 0.9;
+            font-size: 1.1em;
+        }
+        
+        .chat-container {
+            height: 500px;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .messages {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+            background: #f8f9fa;
+        }
+        
+        .message {
+            margin: 15px 0;
+            padding: 15px 20px;
+            border-radius: 20px;
+            max-width: 80%;
+            word-wrap: break-word;
+            animation: fadeIn 0.3s ease-in;
+        }
+        
+        .user-message {
+            background: #007bff;
+            color: white;
+            margin-left: auto;
+            text-align: right;
+        }
+        
+        .ai-message {
+            background: #e9ecef;
+            color: #333;
+        }
+        
+        .system-message {
+            background: #fff3cd;
+            color: #856404;
+            text-align: center;
+            margin: 10px auto;
+            font-style: italic;
+        }
+        
+        .input-section {
+            padding: 20px;
+            background: white;
+            border-top: 1px solid #e9ecef;
+        }
+        
+        .input-container {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+        
+        .message-input {
+            flex: 1;
+            padding: 15px 20px;
+            border: 2px solid #e9ecef;
+            border-radius: 25px;
+            outline: none;
+            font-size: 16px;
+            transition: border-color 0.3s ease;
+        }
+        
+        .message-input:focus {
+            border-color: #007bff;
+        }
+        
+        .send-button {
+            padding: 15px 25px;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+        
+        .send-button:hover:not(:disabled) {
+            background: #0056b3;
+            transform: translateY(-1px);
+        }
+        
+        .send-button:disabled {
+            background: #6c757d;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .quick-actions {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+        }
+        
+        .quick-button {
+            padding: 8px 16px;
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.2s ease;
+        }
+        
+        .quick-button:hover {
+            background: #e9ecef;
+            transform: translateY(-1px);
+        }
+        
+        .status {
+            text-align: center;
+            padding: 10px;
+            font-size: 14px;
+            color: #6c757d;
+            background: #f8f9fa;
+        }
+        
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 15px;
+            color: #007bff;
+        }
+        
+        .spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #007bff;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 10px;
+        }
+        
+        .config-section {
+            padding: 20px;
+            background: #f8f9fa;
+            border-top: 1px solid #e9ecef;
+        }
+        
+        .config-row {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        
+        .config-input {
+            padding: 8px 12px;
+            border: 1px solid #dee2e6;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        @media (max-width: 600px) {
+            .container {
+                margin: 10px;
+                border-radius: 10px;
+            }
+            
+            .header h1 {
+                font-size: 2em;
+            }
+            
+            .quick-actions {
+                justify-content: center;
+            }
+            
+            .config-row {
+                flex-direction: column;
+                align-items: stretch;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🤖 AI Language Model</h1>
+            <p>Custom trained transformer model for conversational AI</p>
+        </div>
+        
+        <div class="status" id="status">Connecting to API...</div>
+        
+        <div class="chat-container">
+            <div class="messages" id="messages">
+                <div class="ai-message message">
+                    Welcome! I'm an AI assistant powered by a custom transformer model. 
+                    Type a message below to start chatting with me.
+                </div>
+            </div>
+            
+            <div class="loading" id="loading">
+                <div class="spinner"></div>
+                Generating response...
+            </div>
+        </div>
+        
+        <div class="input-section">
+            <div class="quick-actions">
+                <div class="quick-button" onclick="sendQuickMessage('Hello!')">👋 Say Hello</div>
+                <div class="quick-button" onclick="sendQuickMessage('What can you help me with?')">❓ Ask for Help</div>
+                <div class="quick-button" onclick="sendQuickMessage('Tell me about AI')">🧠 About AI</div>
+                <div class="quick-button" onclick="clearChat()">🗑️ Clear Chat</div>
+            </div>
+            
+            <div class="input-container">
+                <input 
+                    type="text" 
+                    id="messageInput" 
+                    class="message-input" 
+                    placeholder="Type your message here..."
+                    onkeypress="handleKeyPress(event)"
+                >
+                <button id="sendButton" class="send-button" onclick="sendMessage()">Send</button>
+            </div>
+        </div>
+        
+        <div class="config-section">
+            <div class="config-row">
+                <label>API URL:</label>
+                <input type="text" id="apiUrl" class="config-input" 
+                       value="https://your-deployed-api.replit.app" 
+                       placeholder="Enter your API URL">
+                <button onclick="testConnection()" class="quick-button">Test Connection</button>
+            </div>
+            <div style="font-size: 12px; color: #6c757d; margin-top: 10px;">
+                Deploy your API to Replit and update the URL above. For localhost testing, use: http://localhost:8000
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let API_BASE = 'http://localhost:8000'; // Default for local testing
+        
+        // Auto-detect if running on GitHub Pages
+        if (window.location.hostname.includes('github.io')) {
+            API_BASE = document.getElementById('apiUrl').value;
+        }
+        
+        function addMessage(content, isUser = false, isSystem = false) {
+            const messagesDiv = document.getElementById('messages');
+            const messageDiv = document.createElement('div');
+            
+            if (isSystem) {
+                messageDiv.className = 'message system-message';
+            } else {
+                messageDiv.className = `message ${isUser ? 'user-message' : 'ai-message'}`;
+            }
+            
+            messageDiv.textContent = content;
+            messagesDiv.appendChild(messageDiv);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+        
+        function setLoading(loading) {
+            const loadingDiv = document.getElementById('loading');
+            const sendButton = document.getElementById('sendButton');
+            const messageInput = document.getElementById('messageInput');
+            
+            loadingDiv.style.display = loading ? 'block' : 'none';
+            sendButton.disabled = loading;
+            messageInput.disabled = loading;
+        }
+        
+        function setStatus(message, isError = false) {
+            const statusDiv = document.getElementById('status');
+            statusDiv.textContent = message;
+            statusDiv.style.color = isError ? '#dc3545' : '#6c757d';
+            statusDiv.style.background = isError ? '#f8d7da' : '#f8f9fa';
+        }
+        
+        async function sendMessage(message = null) {
+            const input = document.getElementById('messageInput');
+            const text = message || input.value.trim();
+            
+            if (!text) return;
+            
+            addMessage(text, true);
+            if (!message) input.value = '';
+            
+            setLoading(true);
+            setStatus('Generating response...');
+            
+            try {
+                // Clean message for URL encoding
+                const cleanText = text.replace(/[^a-zA-Z0-9\s?!.,-]/g, '');
+                const response = await fetch(`${API_BASE}/api/chat/${encodeURIComponent(cleanText)}`, {
+                    method: 'GET',
+                    headers: {
+                        'Accept': 'application/json',
+                    }
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+                
+                const data = await response.json();
+                
+                if (data.error) {
+                    addMessage(`Error: ${data.error}`, false, true);
+                    setStatus('Error occurred', true);
+                } else {
+                    addMessage(data.response || 'No response received');
+                    setStatus('Ready to chat!');
+                }
+            } catch (error) {
+                console.error('Chat error:', error);
+                addMessage('Connection failed. Please check your API URL in the settings below.', false, true);
+                setStatus('Connection error', true);
+            }
+            
+            setLoading(false);
+        }
+        
+        function sendQuickMessage(message) {
+            sendMessage(message);
+        }
+        
+        function clearChat() {
+            const messagesDiv = document.getElementById('messages');
+            messagesDiv.innerHTML = `
+                <div class="ai-message message">
+                    Chat cleared! How can I help you today?
+                </div>
+            `;
+            setStatus('Ready to chat!');
+        }
+        
+        function handleKeyPress(event) {
+            if (event.key === 'Enter') {
+                sendMessage();
+            }
+        }
+        
+        async function testConnection() {
+            const apiUrl = document.getElementById('apiUrl').value.trim();
+            if (!apiUrl) {
+                setStatus('Please enter an API URL', true);
+                return;
+            }
+            
+            API_BASE = apiUrl;
+            setStatus('Testing connection...');
+            
+            try {
+                const response = await fetch(`${API_BASE}/`, {
+                    method: 'GET',
+                    headers: { 'Accept': 'application/json' }
+                });
+                
+                if (response.ok) {
+                    // Test chat endpoint
+                    const chatResponse = await fetch(`${API_BASE}/api/chat/test`);
+                    const chatData = await chatResponse.json();
+                    
+                    if (chatResponse.ok && !chatData.error) {
+                        setStatus('✓ Connected! Ready to chat.');
+                        addMessage('Connection successful! You can now chat with the AI.', false, true);
+                    } else {
+                        setStatus('API connected but chat needs setup', true);
+                    }
+                } else {
+                    throw new Error('Connection failed');
+                }
+            } catch (error) {
+                setStatus('Connection failed. Check URL and try again.', true);
+                console.error('Connection error:', error);
+            }
+        }
+        
+        // Initialize on page load
+        window.onload = async function() {
+            // Check if running locally or on GitHub Pages
+            if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+                API_BASE = 'http://localhost:8000';
+                document.getElementById('apiUrl').value = API_BASE;
+                await testConnection();
+            } else {
+                setStatus('Configure your API URL below and click Test Connection');
+                addMessage('Welcome to the AI Language Model demo! Please configure your API URL in the settings below.', false, true);
+            }
+        };
+    </script>
+</body>
+</html>

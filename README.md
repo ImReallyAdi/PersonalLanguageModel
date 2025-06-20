@@ -1,159 +1,201 @@
-# My Own LLM - Educational Language Model System
+# Custom LLM Training & Chat System
 
-A complete educational platform for training and using character-level language models, featuring both a web interface and REST API.
+A complete implementation of a language model training and inference system built with PyTorch, featuring multiple interfaces and deployment options.
 
-## Features
+## 🚀 Live Demo
 
-### Web Interface (Streamlit)
-- **Interactive Training**: Train models with custom text data
-- **Real-time Progress**: Watch training progress with live loss charts
-- **Text Generation**: Generate creative text with customizable parameters
-- **Model Management**: Save, load, and analyze trained models
-- **Vocabulary Analysis**: Explore model vocabulary and statistics
+**GitHub Pages Demo:** [View Live Demo](https://yourusername.github.io/your-repo-name)
 
-### REST API (FastAPI)
-- **Model Training**: `/model/train` - Train new models programmatically
-- **Text Generation**: `/model/generate` - Generate text with various parameters
-- **Multiple Generation**: `/model/generate/multiple` - Generate multiple text samples
-- **Model Info**: `/model/info` - Get detailed model information
-- **Training Status**: `/model/training/status` - Monitor training progress
-- **File Upload**: `/model/upload-training-data` - Upload training text files
-- **Vocabulary**: `/model/vocabulary` - Access model vocabulary
-- **Token Probabilities**: `/model/probabilities` - Get token probability distributions
+## 📋 Features
 
-## Quick Start
+- **Custom Transformer Model**: Character-level transformer architecture
+- **Training Interface**: Web-based model training with real-time progress
+- **Multiple Chat Interfaces**: Streamlit, HTML, and API endpoints
+- **Database Integration**: PostgreSQL for storing models and conversations
+- **REST API**: Complete FastAPI backend with training and inference endpoints
+- **GitHub Pages Ready**: Deployable frontend for easy sharing
 
-### Web Interface
-1. Access the web interface at: `http://localhost:5000`
-2. Choose "Data & Training" to train a new model
-3. Select sample data or upload your own text
-4. Configure training parameters and start training
-5. Use "Text Generation" to create new text
-6. View "Model Info" for detailed statistics
+## 🏗️ Architecture
 
-### API Usage
-1. API is available at: `http://localhost:8000`
-2. View interactive documentation at: `http://localhost:8000/docs`
+```
+├── Training Interface (Streamlit) - Port 5000
+├── Simple Chatbot (Streamlit) - Port 5002  
+├── HTML Chat Interface - Port 5003
+├── API Server (FastAPI) - Port 8000
+└── PostgreSQL Database
+```
 
-#### Example API Calls
+## 🚀 Quick Start (Local Development)
 
-**Train a Model:**
+1. **Clone the repository**
 ```bash
-curl -X POST "http://localhost:8000/model/train" \
-  -H "Content-Type: application/json" \
-  -d '{
+git clone https://github.com/yourusername/your-repo-name.git
+cd your-repo-name
+```
+
+2. **Install dependencies**
+```bash
+pip install torch matplotlib streamlit fastapi uvicorn sqlalchemy psycopg2-binary
+```
+
+3. **Start the services**
+```bash
+# Start API server
+python api.py
+
+# Start training interface (new terminal)
+streamlit run app.py --server.port 5000
+
+# Start simple chat (new terminal)  
+streamlit run simple_chatbot.py --server.port 5002
+
+# Start HTML interface (new terminal)
+python chat_server.py
+```
+
+4. **Access the interfaces**
+- Training: http://localhost:5000
+- Simple Chat: http://localhost:5002
+- HTML Chat: http://localhost:5003/quick_chat.html
+- API Docs: http://localhost:8000/docs
+
+## 🌐 GitHub Pages Deployment
+
+### Step 1: Deploy API to Replit
+
+1. Fork this repository to your GitHub account
+2. Import to Replit from GitHub
+3. Run the project - Replit will automatically start the API server
+4. Note your Replit app URL (e.g., `https://your-app.yourusername.repl.co`)
+
+### Step 2: Enable GitHub Pages
+
+1. Go to your GitHub repository settings
+2. Navigate to "Pages" section
+3. Set source to "Deploy from a branch"
+4. Select "main" branch and "/ (root)" folder
+5. Save settings
+
+### Step 3: Configure API URL
+
+1. Visit your GitHub Pages URL (https://yourusername.github.io/your-repo-name)
+2. In the API URL field, enter your Replit app URL
+3. Click "Test Connection" to verify
+4. Start chatting!
+
+## 📡 API Endpoints
+
+### Training
+- `POST /model/train` - Train a new model
+- `GET /model/training/status` - Check training progress
+- `GET /model/info` - Get model information
+
+### Inference  
+- `GET /api/chat/{message}` - Quick chat endpoint
+- `POST /chat/message` - Advanced chat with parameters
+- `POST /generate` - Text generation with custom settings
+
+### Models
+- `GET /models/list` - List saved models
+- `POST /model/load` - Load a specific model
+- `GET /model/vocabulary` - Get model vocabulary
+
+## 🔧 Configuration
+
+### Model Parameters
+```python
+{
+    "sequence_length": 20,    # Input sequence length
+    "batch_size": 8,         # Training batch size
+    "learning_rate": 0.01,   # Learning rate
+    "num_epochs": 3,         # Training epochs
+    "embed_dim": 64,         # Embedding dimension
+    "num_heads": 2,          # Attention heads
+    "num_layers": 2          # Transformer layers
+}
+```
+
+### Environment Variables
+```bash
+DATABASE_URL=postgresql://user:pass@host:port/db
+PGHOST=localhost
+PGPORT=5432
+PGUSER=your_user
+PGPASSWORD=your_password
+PGDATABASE=your_db
+```
+
+## 📊 Database Schema
+
+The system uses PostgreSQL with the following tables:
+- `models` - Stored trained models
+- `training_sessions` - Training history and metrics
+- `training_epochs` - Individual epoch results
+- `generation_requests` - Text generation logs
+- `training_data` - Training datasets
+
+## 🎯 Usage Examples
+
+### Training a Model
+```python
+import requests
+
+response = requests.post('http://localhost:8000/model/train', json={
     "text": "Your training text here...",
-    "sequence_length": 50,
-    "batch_size": 16,
-    "learning_rate": 0.003,
-    "num_epochs": 20,
-    "embed_dim": 128,
-    "num_heads": 4,
-    "num_layers": 2
-  }'
+    "sequence_length": 20,
+    "batch_size": 8,
+    "num_epochs": 5
+})
 ```
 
-**Generate Text:**
-```bash
-curl -X POST "http://localhost:8000/model/generate" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "prompt": "Once upon a time",
-    "max_length": 200,
-    "temperature": 1.0,
-    "top_k": 10
-  }'
+### Generating Text
+```python
+# Quick chat
+response = requests.get('http://localhost:8000/api/chat/hello')
+
+# Advanced generation
+response = requests.post('http://localhost:8000/generate', json={
+    "prompt": "Hello, I am",
+    "max_length": 100,
+    "temperature": 0.8
+})
 ```
 
-**Check Training Status:**
-```bash
-curl "http://localhost:8000/model/training/status"
-```
+## 🔒 Security Notes
 
-## Model Architecture
+- Never commit API keys or sensitive credentials
+- Use environment variables for configuration
+- Enable CORS appropriately for your deployment
+- Consider rate limiting for production use
 
-The system uses a character-level transformer model with:
-- **Multi-head attention**: Captures long-range dependencies
-- **Positional encoding**: Maintains sequence order information
-- **Layer normalization**: Stabilizes training
-- **Dropout regularization**: Prevents overfitting
+## 🤝 Contributing
 
-## Training Parameters
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Test thoroughly
+5. Submit a pull request
 
-- **Sequence Length**: Length of input sequences (10-200)
-- **Batch Size**: Number of sequences per batch (1-64)
-- **Learning Rate**: Training step size (0.001-0.1)
-- **Epochs**: Number of training iterations (1-100)
-- **Embedding Dimension**: Size of character embeddings (64-512)
-- **Attention Heads**: Number of attention mechanisms (2-8)
-- **Layers**: Number of transformer layers (1-8)
+## 📄 License
 
-## Generation Parameters
+MIT License - see LICENSE file for details
 
-- **Temperature**: Controls randomness (0.1-2.0)
-- **Top-K**: Limits vocabulary to top K tokens
-- **Top-P**: Nucleus sampling threshold
-- **Max Length**: Maximum generated text length
+## 🐛 Troubleshooting
 
-## Technical Details
+### Common Issues
 
-### Dependencies
-- PyTorch: Neural network framework
-- Streamlit: Web interface
-- FastAPI: REST API framework
-- Matplotlib: Visualization
-- NumPy: Numerical computations
+**Connection Error**: Ensure your API server is running and accessible
+**Training Fails**: Check that embed_dim is divisible by num_heads
+**Memory Issues**: Reduce batch_size or sequence_length for large models
+**CORS Errors**: Add your domain to the CORS settings in api.py
 
-### Model Components
-- `model.py`: Transformer architecture
-- `trainer.py`: Training loop and optimization
-- `data_loader.py`: Text preprocessing and batching
-- `text_generator.py`: Text generation algorithms
-- `utils.py`: Utility functions and model persistence
+### Support
 
-### Interfaces
-- `app.py`: Streamlit web application
-- `api.py`: FastAPI REST server
+For issues and questions:
+1. Check the troubleshooting section above
+2. Review API documentation at `/docs`
+3. Open an issue on GitHub with detailed information
 
-## System Requirements
+---
 
-- Python 3.11+
-- CUDA (optional, for GPU acceleration)
-- 4GB+ RAM recommended
-- Text data for training
-
-## Educational Purpose
-
-This system is designed for learning about:
-- Language model architecture
-- Transformer attention mechanisms
-- Character-level text processing
-- Neural network training
-- Text generation techniques
-- API development
-- Web interface design
-
-## API Documentation
-
-Complete API documentation is available at `/docs` when the server is running, providing:
-- Interactive endpoint testing
-- Request/response schemas
-- Parameter descriptions
-- Example usage
-
-## Troubleshooting
-
-**Training Issues:**
-- Ensure text data is at least 100 characters
-- Adjust learning rate if loss doesn't decrease
-- Reduce batch size if memory errors occur
-
-**Generation Issues:**
-- Train a model before generating text
-- Check model vocabulary compatibility
-- Adjust temperature for different creativity levels
-
-**API Issues:**
-- Verify server is running on port 8000
-- Check request format matches API schemas
-- Monitor training status endpoint for progress
+Built with PyTorch, FastAPI, and Streamlit
