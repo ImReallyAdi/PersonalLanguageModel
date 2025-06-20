@@ -1,0 +1,72 @@
+name: Deploy API to GitHub Pages
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install torch fastapi uvicorn python-multipart
+    
+    - name: Test API
+      run: |
+        python -c "
+        import sys
+        sys.path.append('.')
+        from api import app
+        print('API imported successfully')
+        "
+    
+    - name: Build static API docs
+      run: |
+        python -c "
+        import sys
+        sys.path.append('.')
+        from api import app
+        import json
+        
+        # Generate API documentation as static JSON
+        docs = {
+            'title': 'Personal Language Model API',
+            'version': '1.0.0',
+            'description': 'GitHub Pages compatible LLM API',
+            'endpoints': {
+                '/': 'API status and health check',
+                '/api/chat/{message}': 'Chat with the AI model via GET request',
+                '/model/info': 'Get current model information',
+                '/docs': 'API documentation'
+            },
+            'usage': {
+                'chat': 'https://yourusername.github.io/PersonalLanguageModel/api/chat/hello',
+                'info': 'https://yourusername.github.io/PersonalLanguageModel/model/info'
+            },
+            'cors': 'Enabled for all origins',
+            'note': 'This API runs client-side using WebAssembly and PyScript'
+        }
+        
+        with open('api-docs.json', 'w') as f:
+            json.dump(docs, f, indent=2)
+        "
+    
+    - name: Deploy to GitHub Pages
+      uses: peaceiris/actions-gh-pages@v3
+      if: github.ref == 'refs/heads/main'
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        publish_dir: ./
+        destination_dir: api
