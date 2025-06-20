@@ -190,7 +190,19 @@
             setStatus('Getting response...');
             
             try {
-                const response = await fetch(`${API_BASE}/api/chat/${encodeURIComponent(text)}`);
+                // Clean the message for URL encoding
+                const cleanText = text.replace(/[^a-zA-Z0-9\s?!.,-]/g, '');
+                const response = await fetch(`${API_BASE}/api/chat/${encodeURIComponent(cleanText)}`, {
+                    method: 'GET',
+                    headers: {
+                        'Accept': 'application/json',
+                    }
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+                
                 const data = await response.json();
                 
                 if (data.error) {
@@ -201,7 +213,8 @@
                     setStatus('Ready to chat!');
                 }
             } catch (error) {
-                addMessage('Sorry, I had trouble connecting. Make sure the API server is running.');
+                console.error('Chat error:', error);
+                addMessage(`Connection error: ${error.message}. Try refreshing the page.`);
                 setStatus('Connection error');
             }
             
@@ -223,17 +236,21 @@
             try {
                 const response = await fetch(`${API_BASE}/`);
                 if (response.ok) {
-                    setStatus('Connected to API - Ready to chat!');
-                    // Test the chat endpoint
-                    const testResponse = await fetch(`${API_BASE}/api/chat/test`);
-                    if (testResponse.ok) {
-                        setStatus('Chat system ready!');
+                    // Test the chat endpoint with a simple message
+                    const testResponse = await fetch(`${API_BASE}/api/chat/hi`);
+                    const testData = await testResponse.json();
+                    
+                    if (testResponse.ok && !testData.error) {
+                        setStatus('✓ Chat system ready! Type a message below.');
+                    } else {
+                        setStatus('API connected but chat may need setup');
                     }
                 } else {
                     setStatus('API connection issue');
                 }
-            } catch {
+            } catch (error) {
                 setStatus('Cannot connect to API server');
+                console.error('Connection error:', error);
             }
         };
     </script>
