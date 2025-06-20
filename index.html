@@ -294,10 +294,16 @@
     <script>
         let API_BASE = 'http://localhost:8000'; // Default for local testing
         
-        // Auto-detect if running on GitHub Pages
-        if (window.location.hostname.includes('github.io')) {
-            API_BASE = document.getElementById('apiUrl').value;
+        // Auto-detect if running on GitHub Pages or update from input
+        function updateApiBase() {
+            const apiUrlInput = document.getElementById('apiUrl');
+            if (apiUrlInput && apiUrlInput.value.trim()) {
+                API_BASE = apiUrlInput.value.trim();
+            }
         }
+        
+        // Update API base when page loads
+        updateApiBase();
         
         function addMessage(content, isUser = false, isSystem = false) {
             const messagesDiv = document.getElementById('messages');
