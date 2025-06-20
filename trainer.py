@@ -8,6 +8,8 @@ class ModelTrainer:
     """Trainer class for the language model."""
     
     def __init__(self, model, data_loader, learning_rate=0.003, device='cpu'):
+        if isinstance(device, torch.device):
+            device = str(device)
         self.model = model
         self.data_loader = data_loader
         self.device = device
@@ -21,8 +23,7 @@ class ModelTrainer:
             self.optimizer, 
             mode='min', 
             factor=0.5, 
-            patience=5, 
-            verbose=False
+            patience=5
         )
         
         # Training statistics

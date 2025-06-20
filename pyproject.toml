@@ -4,10 +4,13 @@ version = "0.1.0"
 description = "Add your description here"
 requires-python = ">=3.11"
 dependencies = [
+    "fastapi>=0.115.13",
     "matplotlib>=3.10.3",
     "numpy>=2.3.0",
+    "python-multipart>=0.0.20",
     "streamlit>=1.46.0",
     "torch>=2.7.1",
+    "uvicorn>=0.34.3",
 ]
 
 [[tool.uv.index]]

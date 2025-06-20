@@ -6,6 +6,8 @@ class TextGenerator:
     """Text generation class for the trained language model."""
     
     def __init__(self, model, char_to_idx, idx_to_char, device='cpu'):
+        if isinstance(device, torch.device):
+            device = str(device)
         self.model = model
         self.char_to_idx = char_to_idx
         self.idx_to_char = idx_to_char

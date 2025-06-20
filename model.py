@@ -16,7 +16,10 @@ class PositionalEncoding(nn.Module):
                            (-math.log(10000.0) / embed_dim))
         
         pe[:, 0::2] = torch.sin(position * div_term)
-        pe[:, 1::2] = torch.cos(position * div_term)
+        if embed_dim % 2 == 1:
+            pe[:, 1::2] = torch.cos(position * div_term[:embed_dim//2])
+        else:
+            pe[:, 1::2] = torch.cos(position * div_term)
         pe = pe.unsqueeze(0).transpose(0, 1)
         
         self.register_buffer('pe', pe)
