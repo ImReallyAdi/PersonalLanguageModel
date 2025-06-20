@@ -343,6 +343,9 @@
             
             if (!text) return;
             
+            // Update API base before sending
+            updateApiBase();
+            
             addMessage(text, true);
             if (!message) input.value = '';
             
