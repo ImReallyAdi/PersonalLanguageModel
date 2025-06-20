@@ -606,15 +606,16 @@ async def chat_message(message: str, personality: str = "helpful", temperature: 
         raise HTTPException(status_code=400, detail="No model loaded. Please load a model first.")
     
     try:
-        # Get personality template
-        personalities_response = await get_chat_personalities()
-        personalities = personalities_response["personalities"]
+        # Simplified personality templates
+        personality_prompts = {
+            'helpful': f"User: {message}\nAssistant:",
+            'creative': f"User: {message}\nCreative AI:",
+            'professional': f"User: {message}\nProfessional response:",
+            'friendly': f"User: {message}\nFriend:",
+            'wise': f"User: {message}\nWise mentor:"
+        }
         
-        if personality not in personalities:
-            personality = "helpful"
-        
-        prompt_template = personalities[personality]["prompt_template"]
-        prompt = prompt_template.format(message=message)
+        prompt = personality_prompts.get(personality, personality_prompts['helpful'])
         
         # Generate response
         start_time = time.time()
@@ -632,36 +633,48 @@ async def chat_message(message: str, personality: str = "helpful", temperature: 
         # Extract AI response
         if "Assistant:" in generated_text:
             ai_response = generated_text.split("Assistant:")[-1].strip()
-        elif "AI:" in generated_text:
-            ai_response = generated_text.split("AI:")[-1].strip()
+        elif ":" in generated_text:
+            ai_response = generated_text.split(":")[-1].strip()
         else:
             ai_response = generated_text[len(prompt):].strip()
         
-        # Log to database
-        if current_model_id:
-            log_generation_request(db, {
-                'model_id': current_model_id,
-                'prompt': message,
-                'generated_text': ai_response,
-                'max_length': max_length,
-                'temperature': temperature,
-                'top_k': 10,
-                'generation_time_ms': generation_time
-            })
-        
         return {
-            "user_message": message,
-            "ai_response": ai_response,
-            "personality": personality,
-            "generation_time_ms": generation_time,
-            "parameters": {
-                "temperature": temperature,
-                "max_length": max_length
-            }
+            "response": ai_response,
+            "time_ms": generation_time
         }
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/chat/{message}")
+async def quick_chat(message: str):
+    """Quick chat endpoint for simple GET requests"""
+    global current_model, char_to_idx, idx_to_char
+    
+    if current_model is None:
+        return {"error": "No model loaded"}
+    
+    try:
+        prompt = f"User: {message}\nAI:"
+        
+        generator = TextGenerator(current_model, char_to_idx, idx_to_char, str(get_device()))
+        generated_text = generator.generate(
+            prompt=prompt,
+            max_length=100,
+            temperature=0.8,
+            top_k=10
+        )
+        
+        # Extract response
+        if "AI:" in generated_text:
+            response = generated_text.split("AI:")[-1].strip()
+        else:
+            response = generated_text[len(prompt):].strip()
+        
+        return {"response": response}
+        
+    except Exception as e:
+        return {"error": str(e)}
 
 @app.get("/system/info")
 async def get_system_info():
