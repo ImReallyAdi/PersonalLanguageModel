@@ -1,19 +1,29 @@
-from fastapi import FastAPI, HTTPException, File, UploadFile, Form
+from fastapi import FastAPI, HTTPException, File, UploadFile, Form, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
+from sqlalchemy.orm import Session
 import torch
 import json
 import os
+import pickle
+import io
+import time
 from model import SimpleTransformer
 from trainer import ModelTrainer
 from data_loader import TextDataLoader
 from text_generator import TextGenerator
 from utils import save_model, load_model, get_device, count_parameters
+from database import (
+    get_db, init_database, save_model_to_db, load_model_from_db, list_models,
+    create_training_session, update_training_session, log_training_epoch,
+    log_generation_request, save_training_data, list_training_data, get_training_data,
+    get_training_statistics, get_generation_statistics, get_db_session
+)
 import asyncio
 import threading
-import time
+from datetime import datetime
 
 app = FastAPI(
     title="My Own LLM API",
@@ -35,7 +45,14 @@ current_model = None
 current_trainer = None
 char_to_idx = None
 idx_to_char = None
+current_model_id = None
+current_training_session_id = None
 training_progress = {"status": "idle", "epoch": 0, "loss": 0, "total_epochs": 0}
+
+# Initialize database on startup
+@app.on_event("startup")
+async def startup_event():
+    init_database()
 
 # Request/Response models
 class TrainingRequest(BaseModel):
@@ -92,21 +109,43 @@ async def get_model_info():
     )
 
 @app.post("/model/train")
-async def train_model(request: TrainingRequest):
+async def train_model(request: TrainingRequest, db: Session = Depends(get_db)):
     """Train a new model with the provided text data"""
-    global current_model, current_trainer, char_to_idx, idx_to_char, training_progress
+    global current_model, current_trainer, char_to_idx, idx_to_char, training_progress, current_training_session_id
     
     try:
         # Validate input
         if len(request.text) < 100:
             raise HTTPException(status_code=400, detail="Text must be at least 100 characters long")
         
+        # Save training data to database
+        training_data_id = save_training_data(
+            db, 
+            f"Training_Data_{datetime.now().strftime('%Y%m%d_%H%M%S')}", 
+            request.text, 
+            "API training request"
+        )
+        
+        # Create training session record
+        session_config = {
+            'training_text_length': len(request.text),
+            'sequence_length': request.sequence_length,
+            'batch_size': request.batch_size,
+            'learning_rate': request.learning_rate,
+            'num_epochs': request.num_epochs,
+            'embed_dim': request.embed_dim,
+            'num_heads': request.num_heads,
+            'num_layers': request.num_layers
+        }
+        current_training_session_id = create_training_session(db, session_config)
+        
         # Initialize training progress
         training_progress = {
             "status": "preparing",
             "epoch": 0,
             "loss": 0,
-            "total_epochs": request.num_epochs
+            "total_epochs": request.num_epochs,
+            "session_id": current_training_session_id
         }
         
         # Prepare data
@@ -143,6 +182,8 @@ async def train_model(request: TrainingRequest):
         
         return {
             "message": "Training started",
+            "session_id": current_training_session_id,
+            "training_data_id": training_data_id,
             "model_info": {
                 "vocab_size": vocab_size,
                 "parameters": count_parameters(model),
@@ -154,46 +195,107 @@ async def train_model(request: TrainingRequest):
         
     except Exception as e:
         training_progress["status"] = "error"
+        if current_training_session_id:
+            update_training_session(db, current_training_session_id, {
+                "status": "error",
+                "error_message": str(e),
+                "completed_at": datetime.utcnow()
+            })
         raise HTTPException(status_code=500, detail=str(e))
 
 async def train_model_background(num_epochs: int):
     """Background training function"""
-    global training_progress, current_trainer
+    global training_progress, current_trainer, current_model, char_to_idx, idx_to_char, current_training_session_id, current_model_id
     
     try:
         training_progress["status"] = "training"
+        start_time = datetime.utcnow()
         
-        for epoch in range(num_epochs):
-            if current_trainer is None:
-                break
-            epoch_loss = current_trainer.train_epoch()
-            
-            training_progress.update({
-                "epoch": epoch + 1,
-                "loss": epoch_loss,
-                "status": "training"
-            })
-            
-            # Small delay to prevent blocking
-            await asyncio.sleep(0.01)
+        # Get database session
+        db = get_db_session()
         
-        training_progress["status"] = "completed"
-        
-        # Save the trained model
-        if current_model is not None:
-            model_config = {
-                'vocab_size': current_model.vocab_size,
-                'embed_dim': current_model.embed_dim,
-                'num_heads': current_model.num_heads,
-                'num_layers': current_model.num_layers,
-                'sequence_length': current_model.sequence_length
-            }
+        try:
+            epoch_loss = 0.0
+            for epoch in range(num_epochs):
+                if current_trainer is None:
+                    break
+                    
+                epoch_loss = current_trainer.train_epoch()
+                
+                # Log epoch to database
+                if current_training_session_id:
+                    log_training_epoch(
+                        db, 
+                        current_training_session_id, 
+                        epoch + 1, 
+                        epoch_loss, 
+                        current_trainer.get_learning_rate()
+                    )
+                
+                training_progress.update({
+                    "epoch": epoch + 1,
+                    "loss": epoch_loss,
+                    "status": "training"
+                })
+                
+                # Small delay to prevent blocking
+                await asyncio.sleep(0.01)
             
-            save_model(current_model, char_to_idx, idx_to_char, model_config)
+            training_progress["status"] = "completed"
+            end_time = datetime.utcnow()
+            duration = (end_time - start_time).total_seconds()
+            
+            # Save the trained model to database
+            if current_model is not None and char_to_idx is not None and idx_to_char is not None:
+                # Serialize model weights
+                model_buffer = io.BytesIO()
+                torch.save(current_model.state_dict(), model_buffer)
+                model_buffer.seek(0)
+                
+                model_data = {
+                    'name': f"Model_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
+                    'description': f"Trained via API with {num_epochs} epochs",
+                    'vocab_size': current_model.vocab_size,
+                    'embed_dim': current_model.embed_dim,
+                    'num_heads': current_model.num_heads,
+                    'num_layers': current_model.num_layers,
+                    'sequence_length': current_model.sequence_length,
+                    'total_parameters': count_parameters(current_model),
+                    'model_weights': model_buffer.getvalue(),
+                    'char_to_idx': char_to_idx,
+                    'idx_to_char': idx_to_char
+                }
+                
+                current_model_id = save_model_to_db(db, model_data)
+                
+                # Update training session with completion
+                if current_training_session_id:
+                    update_training_session(db, current_training_session_id, {
+                        "model_id": current_model_id,
+                        "final_loss": epoch_loss,
+                        "status": "completed",
+                        "completed_at": end_time,
+                        "duration_seconds": int(duration)
+                    })
+        
+        finally:
+            db.close()
         
     except Exception as e:
         training_progress["status"] = "error"
         training_progress["error"] = str(e)
+        
+        # Update training session with error
+        if current_training_session_id:
+            db = get_db_session()
+            try:
+                update_training_session(db, current_training_session_id, {
+                    "status": "error",
+                    "error_message": str(e),
+                    "completed_at": datetime.utcnow()
+                })
+            finally:
+                db.close()
 
 @app.get("/model/training/status")
 async def get_training_status():
@@ -201,9 +303,9 @@ async def get_training_status():
     return training_progress
 
 @app.post("/model/generate")
-async def generate_text(request: GenerationRequest):
+async def generate_text(request: GenerationRequest, db: Session = Depends(get_db)):
     """Generate text using the trained model"""
-    global current_model, char_to_idx, idx_to_char
+    global current_model, char_to_idx, idx_to_char, current_model_id
     
     if current_model is None:
         raise HTTPException(status_code=400, detail="No trained model available")
@@ -212,6 +314,8 @@ async def generate_text(request: GenerationRequest):
         raise HTTPException(status_code=400, detail="Model vocabulary not available")
     
     try:
+        start_time = time.time()
+        
         generator = TextGenerator(
             current_model,
             char_to_idx,
@@ -227,9 +331,25 @@ async def generate_text(request: GenerationRequest):
             top_p=request.top_p
         )
         
+        generation_time = int((time.time() - start_time) * 1000)
+        
+        # Log generation to database
+        if current_model_id:
+            log_generation_request(db, {
+                'model_id': current_model_id,
+                'prompt': request.prompt,
+                'generated_text': generated_text,
+                'max_length': request.max_length,
+                'temperature': request.temperature,
+                'top_k': request.top_k,
+                'top_p': request.top_p,
+                'generation_time_ms': generation_time
+            })
+        
         return {
             "generated_text": generated_text,
             "prompt": request.prompt,
+            "generation_time_ms": generation_time,
             "parameters": {
                 "max_length": request.max_length,
                 "temperature": request.temperature,
@@ -390,6 +510,158 @@ async def clear_model():
     training_progress = {"status": "idle", "epoch": 0, "loss": 0, "total_epochs": 0}
     
     return {"message": "Model cleared from memory"}
+
+@app.get("/models/list")
+async def list_saved_models(db: Session = Depends(get_db)):
+    """List all saved models"""
+    models = list_models(db)
+    return {"models": models}
+
+@app.post("/model/load")
+async def load_specific_model(request: dict, db: Session = Depends(get_db)):
+    """Load a specific model by ID"""
+    global current_model, char_to_idx, idx_to_char, current_model_id
+    
+    model_id = request.get("model_id")
+    if not model_id:
+        raise HTTPException(status_code=400, detail="model_id is required")
+    
+    try:
+        model_data = load_model_from_db(db, model_id)
+        if not model_data:
+            raise HTTPException(status_code=404, detail="Model not found")
+        
+        # Reconstruct model
+        device = get_device()
+        model = SimpleTransformer(
+            vocab_size=model_data['vocab_size'],
+            embed_dim=model_data['embed_dim'],
+            num_heads=model_data['num_heads'],
+            num_layers=model_data['num_layers'],
+            sequence_length=model_data['sequence_length']
+        ).to(device)
+        
+        # Load weights from binary data
+        model_weights = torch.load(io.BytesIO(model_data['model_weights']), map_location=device)
+        model.load_state_dict(model_weights)
+        model.eval()
+        
+        # Update global state
+        current_model = model
+        char_to_idx = model_data['char_to_idx']
+        idx_to_char = model_data['idx_to_char']
+        current_model_id = model_id
+        
+        return {
+            "message": "Model loaded successfully",
+            "model_info": {
+                "id": model_id,
+                "name": model_data['name'],
+                "vocab_size": model_data['vocab_size'],
+                "parameters": model_data['total_parameters']
+            }
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/chat/personalities")
+async def get_chat_personalities():
+    """Get available chat personalities"""
+    personalities = {
+        "helpful": {
+            "name": "Helpful Assistant",
+            "description": "A friendly and helpful AI assistant",
+            "prompt_template": "You are a helpful AI assistant. User says: {message}\nAssistant:"
+        },
+        "creative": {
+            "name": "Creative Companion", 
+            "description": "An imaginative and creative AI",
+            "prompt_template": "You are a creative and imaginative AI. User says: {message}\nLet me think creatively about this:"
+        },
+        "professional": {
+            "name": "Professional Consultant",
+            "description": "A formal and professional AI consultant", 
+            "prompt_template": "You are a professional AI consultant. User says: {message}\nMy professional response:"
+        },
+        "friendly": {
+            "name": "Casual Friend",
+            "description": "A friendly and casual AI companion",
+            "prompt_template": "You are a friendly and casual AI companion. User says: {message}\nHey there! "
+        },
+        "wise": {
+            "name": "Wise Mentor",
+            "description": "A thoughtful and wise AI mentor",
+            "prompt_template": "You are a wise and thoughtful AI mentor. User says: {message}\nWith wisdom and reflection:"
+        }
+    }
+    return {"personalities": personalities}
+
+@app.post("/chat/message")
+async def chat_message(message: str, personality: str = "helpful", temperature: float = 0.8, max_length: int = 150, db: Session = Depends(get_db)):
+    """Send a chat message and get AI response"""
+    global current_model, char_to_idx, idx_to_char, current_model_id
+    
+    if current_model is None:
+        raise HTTPException(status_code=400, detail="No model loaded. Please load a model first.")
+    
+    try:
+        # Get personality template
+        personalities_response = await get_chat_personalities()
+        personalities = personalities_response["personalities"]
+        
+        if personality not in personalities:
+            personality = "helpful"
+        
+        prompt_template = personalities[personality]["prompt_template"]
+        prompt = prompt_template.format(message=message)
+        
+        # Generate response
+        start_time = time.time()
+        generator = TextGenerator(current_model, char_to_idx, idx_to_char, str(get_device()))
+        
+        generated_text = generator.generate(
+            prompt=prompt,
+            max_length=max_length,
+            temperature=temperature,
+            top_k=10
+        )
+        
+        generation_time = int((time.time() - start_time) * 1000)
+        
+        # Extract AI response
+        if "Assistant:" in generated_text:
+            ai_response = generated_text.split("Assistant:")[-1].strip()
+        elif "AI:" in generated_text:
+            ai_response = generated_text.split("AI:")[-1].strip()
+        else:
+            ai_response = generated_text[len(prompt):].strip()
+        
+        # Log to database
+        if current_model_id:
+            log_generation_request(db, {
+                'model_id': current_model_id,
+                'prompt': message,
+                'generated_text': ai_response,
+                'max_length': max_length,
+                'temperature': temperature,
+                'top_k': 10,
+                'generation_time_ms': generation_time
+            })
+        
+        return {
+            "user_message": message,
+            "ai_response": ai_response,
+            "personality": personality,
+            "generation_time_ms": generation_time,
+            "parameters": {
+                "temperature": temperature,
+                "max_length": max_length
+            }
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/system/info")
 async def get_system_info():

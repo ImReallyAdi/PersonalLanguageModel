@@ -1,4 +1,4 @@
-modules = ["python-3.11"]
+modules = ["python-3.11", "postgresql-16"]
 
 [nix]
 channel = "stable-24_05"
@@ -28,6 +28,10 @@ args = "install_dependencies"
 task = "workflow.run"
 args = "API Server"
 
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Chatbot Server"
+
 [[workflows.workflow]]
 name = "Streamlit Server"
 author = "agent"
@@ -51,12 +55,25 @@ author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "python -m uvicorn api:app --host 0.0.0.0 --port 8000"
+args = "python api.py"
 waitForPort = 8000
+
+[[workflows.workflow]]
+name = "Chatbot Server"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "streamlit run chatbot_app.py --server.port 5001 --server.address 0.0.0.0"
+waitForPort = 5001
 
 [[ports]]
 localPort = 5000
 externalPort = 80
+
+[[ports]]
+localPort = 5001
+externalPort = 3000
 
 [[ports]]
 localPort = 8000
