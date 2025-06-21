@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Language Model Demo</title>
+    <title>Personal Language Model - Browser AI</title>
+    <script src="https://cdn.jsdelivr.net/pyodide/v0.25.1/full/pyodide.js"></script>
     <style>
         * {
             margin: 0;
@@ -19,7 +20,7 @@
         }
         
         .container {
-            max-width: 800px;
+            max-width: 900px;
             margin: 0 auto;
             background: white;
             border-radius: 15px;
@@ -44,10 +45,68 @@
             font-size: 1.1em;
         }
         
+        .status {
+            padding: 20px;
+            text-align: center;
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+        
+        .status.loading {
+            background: #fff3cd;
+            color: #856404;
+        }
+        
+        .status.ready {
+            background: #d4edda;
+            color: #155724;
+        }
+        
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        
+        .features {
+            padding: 20px;
+            background: #f8f9fa;
+            border-bottom: 1px solid #e9ecef;
+        }
+        
+        .features h3 {
+            margin-bottom: 15px;
+            color: #333;
+        }
+        
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 15px;
+        }
+        
+        .feature-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px;
+            background: white;
+            border-radius: 8px;
+            border: 1px solid #e9ecef;
+        }
+        
+        .feature-icon {
+            font-size: 1.5em;
+        }
+        
         .chat-container {
             height: 500px;
             display: flex;
             flex-direction: column;
+            display: none;
+        }
+        
+        .chat-container.show {
+            display: flex;
         }
         
         .messages {
@@ -100,11 +159,11 @@
         
         .message-input {
             flex: 1;
-            padding: 15px 20px;
+            padding: 15px;
             border: 2px solid #e9ecef;
             border-radius: 25px;
-            outline: none;
             font-size: 16px;
+            outline: none;
             transition: border-color 0.3s ease;
         }
         
@@ -119,57 +178,28 @@
             border: none;
             border-radius: 25px;
             cursor: pointer;
-            font-size: 16px;
-            font-weight: 600;
-            transition: all 0.3s ease;
+            font-weight: 500;
+            transition: background-color 0.3s ease;
         }
         
         .send-button:hover:not(:disabled) {
             background: #0056b3;
-            transform: translateY(-1px);
         }
         
         .send-button:disabled {
             background: #6c757d;
             cursor: not-allowed;
-            transform: none;
-        }
-        
-        .quick-actions {
-            display: flex;
-            gap: 10px;
-            margin-bottom: 15px;
-            flex-wrap: wrap;
-        }
-        
-        .quick-button {
-            padding: 8px 16px;
-            background: #f8f9fa;
-            border: 1px solid #dee2e6;
-            border-radius: 20px;
-            cursor: pointer;
-            font-size: 14px;
-            transition: all 0.2s ease;
-        }
-        
-        .quick-button:hover {
-            background: #e9ecef;
-            transform: translateY(-1px);
-        }
-        
-        .status {
-            text-align: center;
-            padding: 10px;
-            font-size: 14px;
-            color: #6c757d;
-            background: #f8f9fa;
         }
         
         .loading {
             display: none;
             text-align: center;
-            padding: 15px;
+            padding: 20px;
             color: #007bff;
+        }
+        
+        .loading.show {
+            display: block;
         }
         
         .spinner {
@@ -183,24 +213,121 @@
             margin-right: 10px;
         }
         
-        .config-section {
+        .quick-actions {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+        }
+        
+        .quick-button {
+            padding: 8px 15px;
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.3s ease;
+        }
+        
+        .quick-button:hover {
+            background: #e9ecef;
+            border-color: #adb5bd;
+        }
+        
+        .training-section {
             padding: 20px;
             background: #f8f9fa;
             border-top: 1px solid #e9ecef;
+            display: none;
         }
         
-        .config-row {
-            display: flex;
+        .training-section.show {
+            display: block;
+        }
+        
+        .training-controls {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
             gap: 15px;
-            align-items: center;
-            margin-bottom: 10px;
+            margin-bottom: 20px;
         }
         
-        .config-input {
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+        
+        .control-group label {
+            font-weight: 500;
+            color: #333;
+        }
+        
+        .control-group input, .control-group select, .control-group textarea {
             padding: 8px 12px;
-            border: 1px solid #dee2e6;
+            border: 1px solid #ddd;
             border-radius: 5px;
             font-size: 14px;
+        }
+        
+        .train-button {
+            padding: 12px 24px;
+            background: #28a745;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 500;
+            font-size: 16px;
+            transition: background-color 0.3s ease;
+        }
+        
+        .train-button:hover:not(:disabled) {
+            background: #218838;
+        }
+        
+        .train-button:disabled {
+            background: #6c757d;
+            cursor: not-allowed;
+        }
+        
+        .progress-bar {
+            width: 100%;
+            height: 20px;
+            background: #e9ecef;
+            border-radius: 10px;
+            overflow: hidden;
+            margin: 10px 0;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background: #007bff;
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+        
+        .tabs {
+            display: flex;
+            background: #f8f9fa;
+            border-bottom: 1px solid #e9ecef;
+        }
+        
+        .tab {
+            padding: 15px 25px;
+            cursor: pointer;
+            border-bottom: 3px solid transparent;
+            transition: all 0.3s ease;
+        }
+        
+        .tab:hover {
+            background: #e9ecef;
+        }
+        
+        .tab.active {
+            border-bottom-color: #007bff;
+            background: white;
         }
         
         @keyframes fadeIn {
@@ -213,7 +340,7 @@
             100% { transform: rotate(360deg); }
         }
         
-        @media (max-width: 600px) {
+        @media (max-width: 768px) {
             .container {
                 margin: 10px;
                 border-radius: 10px;
@@ -227,9 +354,8 @@
                 justify-content: center;
             }
             
-            .config-row {
-                flex-direction: column;
-                align-items: stretch;
+            .training-controls {
+                grid-template-columns: 1fr;
             }
         }
     </style>
@@ -237,17 +363,44 @@
 <body>
     <div class="container">
         <div class="header">
-            <h1>🤖 AI Language Model</h1>
-            <p>Custom trained transformer model for conversational AI</p>
+            <h1>🤖 Personal Language Model</h1>
+            <p>Train and chat with your own AI - runs entirely in your browser!</p>
         </div>
         
-        <div class="status" id="status">Connecting to API...</div>
+        <div class="features">
+            <h3>✨ Features</h3>
+            <div class="feature-grid">
+                <div class="feature-item">
+                    <span class="feature-icon">🌐</span>
+                    <span>Runs entirely in browser</span>
+                </div>
+                <div class="feature-item">
+                    <span class="feature-icon">🔒</span>
+                    <span>Complete privacy - no data sent to servers</span>
+                </div>
+                <div class="feature-item">
+                    <span class="feature-icon">⚡</span>
+                    <span>No installation required</span>
+                </div>
+                <div class="feature-item">
+                    <span class="feature-icon">🎓</span>
+                    <span>Train custom models on your text</span>
+                </div>
+            </div>
+        </div>
         
-        <div class="chat-container">
+        <div class="tabs">
+            <div class="tab active" onclick="switchTab('chat')">💬 Chat</div>
+            <div class="tab" onclick="switchTab('train')">🎓 Train Model</div>
+        </div>
+        
+        <div class="status" id="status">🔄 Loading AI environment...</div>
+        
+        <div class="chat-container" id="chat-container">
             <div class="messages" id="messages">
                 <div class="ai-message message">
-                    Welcome! I'm an AI assistant powered by a custom transformer model. 
-                    Type a message below to start chatting with me.
+                    Welcome! I'm your personal AI assistant running entirely in your browser. 
+                    Start chatting or train me on your own text data!
                 </div>
             </div>
             
@@ -255,55 +408,326 @@
                 <div class="spinner"></div>
                 Generating response...
             </div>
+            
+            <div class="input-section">
+                <div class="quick-actions">
+                    <div class="quick-button" onclick="sendQuickMessage('Hello! How are you?')">👋 Say Hello</div>
+                    <div class="quick-button" onclick="sendQuickMessage('Tell me about yourself')">❓ About You</div>
+                    <div class="quick-button" onclick="sendQuickMessage('Write a short story')">📖 Write Story</div>
+                    <div class="quick-button" onclick="sendQuickMessage('Explain machine learning')">🧠 Explain ML</div>
+                    <div class="quick-button" onclick="clearChat()">🗑️ Clear Chat</div>
+                </div>
+                
+                <div class="input-container">
+                    <input 
+                        type="text" 
+                        id="messageInput" 
+                        class="message-input" 
+                        placeholder="Type your message here..."
+                        onkeypress="handleKeyPress(event)"
+                        disabled
+                    >
+                    <button id="sendButton" class="send-button" onclick="sendMessage()" disabled>Send</button>
+                </div>
+            </div>
         </div>
         
-        <div class="input-section">
-            <div class="quick-actions">
-                <div class="quick-button" onclick="sendQuickMessage('Hello!')">👋 Say Hello</div>
-                <div class="quick-button" onclick="sendQuickMessage('What can you help me with?')">❓ Ask for Help</div>
-                <div class="quick-button" onclick="sendQuickMessage('Tell me about AI')">🧠 About AI</div>
-                <div class="quick-button" onclick="clearChat()">🗑️ Clear Chat</div>
+        <div class="training-section" id="training-section">
+            <h3>🎓 Train Your Own Model</h3>
+            <p>Customize the AI by training it on your own text data. The model will learn patterns from your text and generate similar content.</p>
+            
+            <div class="training-controls">
+                <div class="control-group">
+                    <label>Training Text:</label>
+                    <textarea id="trainingText" rows="6" placeholder="Enter your training text here... (minimum 200 characters)">Once upon a time, there was a brilliant AI researcher who wanted to create the most helpful assistant possible. She spent years studying machine learning, natural language processing, and human-computer interaction. Her goal was to build an AI that could understand context, generate creative content, and assist people with their daily tasks. Through careful training and fine-tuning, she developed a model that could engage in meaningful conversations, write stories, explain complex concepts, and even help with coding problems. The AI learned to be helpful, harmless, and honest in all its interactions.</textarea>
+                </div>
+                
+                <div class="control-group">
+                    <label>Model Size:</label>
+                    <select id="modelSize">
+                        <option value="small">Small (Fast training, basic responses)</option>
+                        <option value="medium" selected>Medium (Balanced performance)</option>
+                        <option value="large">Large (Better quality, slower training)</option>
+                    </select>
+                </div>
+                
+                <div class="control-group">
+                    <label>Training Epochs:</label>
+                    <input type="range" id="epochs" min="1" max="10" value="3" oninput="updateEpochsLabel()">
+                    <span id="epochsLabel">3 epochs</span>
+                </div>
+                
+                <div class="control-group">
+                    <label>Creativity Level:</label>
+                    <input type="range" id="temperature" min="0.1" max="2.0" step="0.1" value="0.8" oninput="updateTemperatureLabel()">
+                    <span id="temperatureLabel">0.8 (balanced)</span>
+                </div>
             </div>
             
-            <div class="input-container">
-                <input 
-                    type="text" 
-                    id="messageInput" 
-                    class="message-input" 
-                    placeholder="Type your message here..."
-                    onkeypress="handleKeyPress(event)"
-                >
-                <button id="sendButton" class="send-button" onclick="sendMessage()">Send</button>
-            </div>
-        </div>
-        
-        <div class="config-section">
-            <div class="config-row">
-                <label>API URL:</label>
-                <input type="text" id="apiUrl" class="config-input" 
-                       value="http://localhost:8000" 
-                       placeholder="Enter your API URL">
-                <button onclick="testConnection()" class="quick-button">Test Connection</button>
-            </div>
-            <div style="font-size: 12px; color: #6c757d; margin-top: 10px;">
-                Deploy your API to Replit and update the URL above. For localhost testing, use: http://localhost:8000
+            <button id="trainButton" class="train-button" onclick="trainModel()">🚀 Start Training</button>
+            
+            <div id="trainingProgress" style="display: none;">
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progressFill"></div>
+                </div>
+                <div id="progressText">Training in progress...</div>
             </div>
         </div>
     </div>
 
     <script>
-        let API_BASE = 'http://localhost:8000'; // Default for local testing
+        let pyodide = null;
+        let currentModel = null;
+        let charToIdx = null;
+        let idxToChar = null;
+        let isModelReady = false;
+        let currentTab = 'chat';
         
-        // Auto-detect if running on GitHub Pages or update from input
-        function updateApiBase() {
-            const apiUrlInput = document.getElementById('apiUrl');
-            if (apiUrlInput && apiUrlInput.value.trim()) {
-                API_BASE = apiUrlInput.value.trim();
+        // Initialize Pyodide and AI model
+        async function initializeAI() {
+            try {
+                updateStatus("Loading Python environment...", "loading");
+                
+                pyodide = await loadPyodide();
+                await pyodide.loadPackage(['micropip']);
+                
+                updateStatus("Installing AI libraries...", "loading");
+                await pyodide.runPython(`
+                    import micropip
+                    await micropip.install(['torch', 'numpy'])
+                `);
+                
+                updateStatus("Setting up AI model...", "loading");
+                await pyodide.runPython(`
+                    import torch
+                    import torch.nn as nn
+                    import numpy as np
+                    import random
+                    from datetime import datetime
+                    
+                    # Global variables
+                    current_model = None
+                    char_to_idx = None
+                    idx_to_char = None
+                    training_progress = {"epoch": 0, "total_epochs": 0, "loss": 0}
+                    
+                    class SimpleTransformer(nn.Module):
+                        def __init__(self, vocab_size, embed_dim=64, num_heads=4, num_layers=2, sequence_length=30):
+                            super().__init__()
+                            self.vocab_size = vocab_size
+                            self.embed_dim = embed_dim
+                            self.num_heads = num_heads
+                            self.num_layers = num_layers
+                            self.sequence_length = sequence_length
+                            
+                            self.embedding = nn.Embedding(vocab_size, embed_dim)
+                            self.pos_encoding = nn.Parameter(torch.randn(sequence_length, embed_dim))
+                            
+                            encoder_layer = nn.TransformerEncoderLayer(
+                                d_model=embed_dim,
+                                nhead=num_heads,
+                                dim_feedforward=embed_dim * 4,
+                                dropout=0.1,
+                                batch_first=True
+                            )
+                            self.transformer = nn.TransformerEncoder(encoder_layer, num_layers=num_layers)
+                            self.output_layer = nn.Linear(embed_dim, vocab_size)
+                        
+                        def forward(self, src):
+                            seq_len = src.size(1)
+                            embeddings = self.embedding(src)
+                            embeddings += self.pos_encoding[:seq_len].unsqueeze(0)
+                            
+                            mask = torch.triu(torch.ones(seq_len, seq_len)) == 1
+                            mask = mask.transpose(0, 1).float()
+                            mask = mask.masked_fill(mask == 0, float('-inf')).masked_fill(mask == 1, 0.0)
+                            
+                            output = self.transformer(embeddings, mask=mask)
+                            return self.output_layer(output)
+                    
+                    def prepare_data(text, sequence_length=30):
+                        # Build vocabulary
+                        chars = sorted(list(set(text)))
+                        char_to_idx_local = {ch: i for i, ch in enumerate(chars)}
+                        idx_to_char_local = {i: ch for i, ch in enumerate(chars)}
+                        
+                        # Encode text
+                        encoded_text = [char_to_idx_local[ch] for ch in text]
+                        
+                        # Create sequences
+                        sequences = []
+                        for i in range(len(encoded_text) - sequence_length):
+                            input_seq = encoded_text[i:i + sequence_length]
+                            target_seq = encoded_text[i + 1:i + sequence_length + 1]
+                            sequences.append((input_seq, target_seq))
+                        
+                        return sequences, char_to_idx_local, idx_to_char_local
+                    
+                    def train_model(text, model_size="medium", epochs=3):
+                        global current_model, char_to_idx, idx_to_char, training_progress
+                        
+                        # Model configurations
+                        configs = {
+                            "small": {"embed_dim": 32, "num_heads": 2, "num_layers": 1, "sequence_length": 20},
+                            "medium": {"embed_dim": 64, "num_heads": 4, "num_layers": 2, "sequence_length": 30},
+                            "large": {"embed_dim": 128, "num_heads": 8, "num_layers": 3, "sequence_length": 40}
+                        }
+                        
+                        config = configs[model_size]
+                        
+                        # Prepare data
+                        sequences, char_to_idx, idx_to_char = prepare_data(text, config["sequence_length"])
+                        vocab_size = len(char_to_idx)
+                        
+                        # Initialize model
+                        model = SimpleTransformer(
+                            vocab_size=vocab_size,
+                            embed_dim=config["embed_dim"],
+                            num_heads=config["num_heads"],
+                            num_layers=config["num_layers"],
+                            sequence_length=config["sequence_length"]
+                        )
+                        
+                        optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+                        criterion = nn.CrossEntropyLoss()
+                        
+                        training_progress = {"epoch": 0, "total_epochs": epochs, "loss": 0}
+                        
+                        # Training loop
+                        for epoch in range(epochs):
+                            model.train()
+                            total_loss = 0
+                            batch_size = min(8, len(sequences))
+                            
+                            # Shuffle sequences
+                            random.shuffle(sequences)
+                            
+                            for i in range(0, len(sequences), batch_size):
+                                batch = sequences[i:i + batch_size]
+                                
+                                inputs = torch.tensor([seq[0] for seq in batch], dtype=torch.long)
+                                targets = torch.tensor([seq[1] for seq in batch], dtype=torch.long)
+                                
+                                optimizer.zero_grad()
+                                outputs = model(inputs)
+                                
+                                loss = criterion(outputs.view(-1, vocab_size), targets.view(-1))
+                                loss.backward()
+                                optimizer.step()
+                                
+                                total_loss += loss.item()
+                            
+                            avg_loss = total_loss / max(1, len(sequences) // batch_size)
+                            training_progress = {"epoch": epoch + 1, "total_epochs": epochs, "loss": avg_loss}
+                        
+                        current_model = model
+                        return True
+                    
+                    def generate_text(prompt="", max_length=100, temperature=0.8):
+                        global current_model, char_to_idx, idx_to_char
+                        
+                        if current_model is None:
+                            return "No model trained yet. Please train a model first."
+                        
+                        current_model.eval()
+                        with torch.no_grad():
+                            # Encode prompt
+                            if prompt:
+                                context = [char_to_idx.get(ch, 0) for ch in prompt]
+                            else:
+                                context = [random.randint(0, len(char_to_idx) - 1)]
+                            
+                            # Generate
+                            for _ in range(max_length):
+                                if len(context) > current_model.sequence_length:
+                                    context = context[-current_model.sequence_length:]
+                                
+                                input_tensor = torch.tensor([context], dtype=torch.long)
+                                outputs = current_model(input_tensor)
+                                logits = outputs[0, -1, :] / temperature
+                                
+                                # Sample from distribution
+                                probs = torch.softmax(logits, dim=-1)
+                                next_token = torch.multinomial(probs, 1).item()
+                                context.append(next_token)
+                            
+                            # Decode
+                            generated_text = ''.join([idx_to_char.get(idx, '') for idx in context])
+                            return generated_text
+                    
+                    def get_training_progress():
+                        return training_progress
+                    
+                    def get_model_info():
+                        global current_model, char_to_idx
+                        
+                        if current_model is None:
+                            return {"status": "No model trained", "vocab_size": 0, "parameters": 0}
+                        
+                        total_params = sum(p.numel() for p in current_model.parameters())
+                        
+                        return {
+                            "status": "Model ready",
+                            "vocab_size": len(char_to_idx) if char_to_idx else 0,
+                            "parameters": total_params,
+                            "embed_dim": current_model.embed_dim,
+                            "num_heads": current_model.num_heads,
+                            "num_layers": current_model.num_layers
+                        }
+                `);
+                
+                updateStatus("Training demo model...", "loading");
+                await trainDemoModel();
+                
+                updateStatus("✅ AI ready! Start chatting or train your own model.", "ready");
+                enableInterface();
+                
+            } catch (error) {
+                updateStatus("❌ Failed to load AI: " + error.message, "error");
+                console.error("AI initialization error:", error);
             }
         }
         
-        // Update API base when page loads
-        updateApiBase();
+        async function trainDemoModel() {
+            const demoText = `Hello! I am an AI assistant created to be helpful, harmless, and honest. I can engage in conversations, answer questions, help with creative writing, explain concepts, and assist with various tasks. I enjoy learning about different topics and helping people solve problems. I aim to provide accurate information and thoughtful responses. I can discuss science, technology, arts, literature, history, and many other subjects. Feel free to ask me anything you'd like to know or talk about. I'm here to help and have interesting conversations with you. What would you like to explore today?`;
+            
+            try {
+                await pyodide.runPython(`train_model("""${demoText}""", "small", 2)`);
+                isModelReady = true;
+            } catch (error) {
+                console.error("Demo model training failed:", error);
+            }
+        }
+        
+        // UI Functions
+        function updateStatus(message, type) {
+            const status = document.getElementById('status');
+            status.textContent = message;
+            status.className = `status ${type}`;
+        }
+        
+        function enableInterface() {
+            document.getElementById('messageInput').disabled = false;
+            document.getElementById('sendButton').disabled = false;
+            document.getElementById('chat-container').classList.add('show');
+        }
+        
+        function switchTab(tab) {
+            currentTab = tab;
+            
+            // Update tab appearance
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            event.target.classList.add('active');
+            
+            // Show/hide sections
+            if (tab === 'chat') {
+                document.getElementById('chat-container').classList.add('show');
+                document.getElementById('training-section').classList.remove('show');
+            } else {
+                document.getElementById('chat-container').classList.remove('show');
+                document.getElementById('training-section').classList.add('show');
+            }
+        }
         
         function addMessage(content, isUser = false, isSystem = false) {
             const messagesDiv = document.getElementById('messages');
@@ -321,64 +745,45 @@
         }
         
         function setLoading(loading) {
-            const loadingDiv = document.getElementById('loading');
-            const sendButton = document.getElementById('sendButton');
-            const messageInput = document.getElementById('messageInput');
-            
-            loadingDiv.style.display = loading ? 'block' : 'none';
-            sendButton.disabled = loading;
-            messageInput.disabled = loading;
+            document.getElementById('loading').classList.toggle('show', loading);
+            document.getElementById('sendButton').disabled = loading;
+            document.getElementById('messageInput').disabled = loading;
         }
         
-        function setStatus(message, isError = false) {
-            const statusDiv = document.getElementById('status');
-            statusDiv.textContent = message;
-            statusDiv.style.color = isError ? '#dc3545' : '#6c757d';
-            statusDiv.style.background = isError ? '#f8d7da' : '#f8f9fa';
-        }
-        
+        // Chat Functions
         async function sendMessage(message = null) {
             const input = document.getElementById('messageInput');
             const text = message || input.value.trim();
             
-            if (!text) return;
-            
-            // Update API base before sending
-            updateApiBase();
+            if (!text || !isModelReady) return;
             
             addMessage(text, true);
             if (!message) input.value = '';
             
             setLoading(true);
-            setStatus('Generating response...');
             
             try {
-                // Clean message for URL encoding
-                const cleanText = text.replace(/[^a-zA-Z0-9\s?!.,-]/g, '');
-                const response = await fetch(`${API_BASE}/api/chat/${encodeURIComponent(cleanText)}`, {
-                    method: 'GET',
-                    headers: {
-                        'Accept': 'application/json',
-                    }
-                });
+                const prompt = `Human: ${text}\nAssistant:`;
+                const temperature = parseFloat(document.getElementById('temperature')?.value || 0.8);
                 
-                if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}`);
+                const response = await pyodide.runPython(`generate_text("${prompt.replace(/"/g, '\\"')}", 80, ${temperature})`);
+                
+                // Extract AI response
+                let aiResponse = response;
+                if (aiResponse.includes('Assistant:')) {
+                    aiResponse = aiResponse.split('Assistant:').pop().trim();
+                }
+                aiResponse = aiResponse.replace(/Human:.*$/g, '').trim();
+                
+                if (aiResponse.length > 200) {
+                    aiResponse = aiResponse.substring(0, 200) + '...';
                 }
                 
-                const data = await response.json();
+                addMessage(aiResponse || "I'm still learning. Try training me with more text!");
                 
-                if (data.error) {
-                    addMessage(`Error: ${data.error}`, false, true);
-                    setStatus('Error occurred', true);
-                } else {
-                    addMessage(data.response || 'No response received');
-                    setStatus('Ready to chat!');
-                }
             } catch (error) {
                 console.error('Chat error:', error);
-                addMessage('Connection failed. Please check your API URL in the settings below.', false, true);
-                setStatus('Connection error', true);
+                addMessage('Sorry, I encountered an error. Please try again.', false, true);
             }
             
             setLoading(false);
@@ -389,13 +794,11 @@
         }
         
         function clearChat() {
-            const messagesDiv = document.getElementById('messages');
-            messagesDiv.innerHTML = `
+            document.getElementById('messages').innerHTML = `
                 <div class="ai-message message">
                     Chat cleared! How can I help you today?
                 </div>
             `;
-            setStatus('Ready to chat!');
         }
         
         function handleKeyPress(event) {
@@ -404,54 +807,79 @@
             }
         }
         
-        async function testConnection() {
-            const apiUrl = document.getElementById('apiUrl').value.trim();
-            if (!apiUrl) {
-                setStatus('Please enter an API URL', true);
+        // Training Functions
+        async function trainModel() {
+            const text = document.getElementById('trainingText').value.trim();
+            const modelSize = document.getElementById('modelSize').value;
+            const epochs = parseInt(document.getElementById('epochs').value);
+            
+            if (text.length < 200) {
+                alert('Please provide at least 200 characters of training text.');
                 return;
             }
             
-            API_BASE = apiUrl;
-            setStatus('Testing connection...');
+            const trainButton = document.getElementById('trainButton');
+            const progressDiv = document.getElementById('trainingProgress');
+            const progressFill = document.getElementById('progressFill');
+            const progressText = document.getElementById('progressText');
+            
+            trainButton.disabled = true;
+            trainButton.textContent = '🔄 Training...';
+            progressDiv.style.display = 'block';
             
             try {
-                const response = await fetch(`${API_BASE}/`, {
-                    method: 'GET',
-                    headers: { 'Accept': 'application/json' }
-                });
+                // Start training
+                await pyodide.runPython(`train_model("""${text.replace(/"/g, '\\"')}""", "${modelSize}", ${epochs})`);
                 
-                if (response.ok) {
-                    // Test chat endpoint
-                    const chatResponse = await fetch(`${API_BASE}/api/chat/test`);
-                    const chatData = await chatResponse.json();
+                // Simulate progress updates
+                for (let i = 0; i <= epochs; i++) {
+                    const progress = (i / epochs) * 100;
+                    progressFill.style.width = progress + '%';
+                    progressText.textContent = `Training epoch ${i}/${epochs}...`;
                     
-                    if (chatResponse.ok && !chatData.error) {
-                        setStatus('✓ Connected! Ready to chat.');
-                        addMessage('Connection successful! You can now chat with the AI.', false, true);
-                    } else {
-                        setStatus('API connected but chat needs setup', true);
+                    if (i < epochs) {
+                        await new Promise(resolve => setTimeout(resolve, 1000));
                     }
-                } else {
-                    throw new Error('Connection failed');
                 }
+                
+                isModelReady = true;
+                progressText.textContent = '✅ Training completed successfully!';
+                addMessage('I\'ve been trained on your text! Try chatting with me now.', false, true);
+                
+                // Switch to chat tab
+                setTimeout(() => {
+                    switchTab('chat');
+                    document.querySelector('.tab').click();
+                }, 2000);
+                
             } catch (error) {
-                setStatus('Connection failed. Check URL and try again.', true);
-                console.error('Connection error:', error);
+                console.error('Training error:', error);
+                progressText.textContent = '❌ Training failed: ' + error.message;
             }
+            
+            trainButton.disabled = false;
+            trainButton.textContent = '🚀 Start Training';
+            
+            setTimeout(() => {
+                progressDiv.style.display = 'none';
+            }, 3000);
+        }
+        
+        function updateEpochsLabel() {
+            const epochs = document.getElementById('epochs').value;
+            document.getElementById('epochsLabel').textContent = `${epochs} epochs`;
+        }
+        
+        function updateTemperatureLabel() {
+            const temp = document.getElementById('temperature').value;
+            let label = 'balanced';
+            if (temp < 0.5) label = 'focused';
+            else if (temp > 1.2) label = 'creative';
+            document.getElementById('temperatureLabel').textContent = `${temp} (${label})`;
         }
         
         // Initialize on page load
-        window.onload = async function() {
-            // Check if running locally or on GitHub Pages
-            if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-                API_BASE = 'http://localhost:8000';
-                document.getElementById('apiUrl').value = API_BASE;
-                await testConnection();
-            } else {
-                setStatus('Configure your API URL below and click Test Connection');
-                addMessage('Welcome to the AI Language Model demo! Please configure your API URL in the settings below.', false, true);
-            }
-        };
+        window.addEventListener('load', initializeAI);
     </script>
 </body>
 </html>
